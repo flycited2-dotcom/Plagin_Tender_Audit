@@ -1,7 +1,9 @@
 // ==UserScript==
 // @name         Учёт тендеров
 // @namespace    plagin-tender-audit
-// @version      1.0.0
+// @version      1.1.0
+// @updateURL    https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
+// @downloadURL  https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @description  Кнопка «В учёт» на страницах закупок: поля заполняются сами, тендер уходит в Google Таблицу
 // @match        https://zakupki.gov.ru/*
 // @match        https://rts-tender.ru/*
@@ -41,12 +43,17 @@
   const STATUSES = ['Новый', 'В работе', 'Подано', 'Торги', 'Выиграли', 'Проиграли', 'Отказ'];
   const TYPES = ['Электронный аукцион', 'Конкурс', 'Запрос котировок', 'Запрос предложений',
     'Ед. поставщик', 'Коммерческая / 223-ФЗ', 'Другое'];
-  const FIELDS = ['number', 'customer', 'subject', 'type', 'nmck', 'takenDate', 'deadline', 'auctionDate', 'status', 'comment', 'url'];
-  const AUTO_FIELDS = ['number', 'customer', 'subject', 'type', 'nmck', 'deadline', 'auctionDate'];
+  const ETPS = ['РТС-тендер', 'Сбербанк-АСТ', 'Росэлторг', 'ЭТП ГПБ', 'ТЭК-Торг', 'РАД (lot-online)', 'ZakazRF',
+    'Фабрикант', 'B2B-Center', 'АСТ ГОЗ', 'Tender.Pro', 'ЕАТ «Берёзка»', 'Малые закупки Крыма'];
+  const FIELDS = ['number', 'customer', 'subject', 'type', 'nmck', 'etp', 'takenDate', 'deadline', 'auctionDate', 'status', 'comment', 'url'];
+  const AUTO_FIELDS = ['number', 'customer', 'subject', 'type', 'nmck', 'etp', 'deadline', 'auctionDate'];
 
   //@@EXTRACT@@
 
   // ---------- хранилище Tampermonkey ----------
+  // Личные настройки из локальной сборки запоминаем в Tampermonkey — тогда автообновление
+  // с GitHub (там настройки пустые) их не сотрёт
+  if (DEFAULT_SETTINGS.url && !GM_getValue('settings', null)) GM_setValue('settings', DEFAULT_SETTINGS);
   const settings = () => Object.assign({}, DEFAULT_SETTINGS, GM_getValue('settings', {}));
   const loadStore = () => GM_getValue('tenders', {});            // id → запись, сохранённая из этого браузера
   const saveStore = s => GM_setValue('tenders', s);
@@ -181,6 +188,8 @@
       <label>Тип закупки<select name="type"></select></label>
       <label>НМЦК, ₽<input name="nmck" inputmode="decimal"></label>
     </div>
+    <label>Площадка (ЭТП)<input name="etp" list="etpList" placeholder="где пройдут торги"></label>
+    <datalist id="etpList"></datalist>
     <div class="row">
       <label>Взяли в работу<input name="takenDate" type="date"></label>
       <label>Статус<select name="status"></select></label>
@@ -205,6 +214,7 @@
     values.map(v => `<option>${v}</option>`).join('');
   field('type').innerHTML = opts(TYPES, true);
   field('status').innerHTML = opts(STATUSES, false);
+  $('#etpList').innerHTML = ETPS.map(v => `<option value="${v}">`).join('');
 
   let current = null;
 
@@ -236,7 +246,14 @@
       current = saved;
       fillForm(current);
       $('.del').hidden = false;
-      setInfo('Этот тендер уже в учёте — обновите статус или данные', 'ok');
+      // площадка появилась позже — дозаполняем у старых записей
+      if (!current.etp && data && data.etp) {
+        field('etp').value = data.etp;
+        field('etp').classList.add('auto');
+        setInfo('Этот тендер уже в учёте. Найдена площадка — нажмите «Сохранить», чтобы дописать её в таблицу', 'ok');
+      } else {
+        setInfo('Этот тендер уже в учёте — обновите статус или данные', 'ok');
+      }
     } else {
       current = { url: pageUrl(), takenDate: todayISO(), status: 'Новый' };
       let found = 0;

@@ -182,6 +182,7 @@ function tgCard(t, tz, now) {
   lines.push('🏛 <b>' + tgEsc(tgShort(t.customer || 'Заказчик не указан', 160)) + '</b>');
   if (t.subject) lines.push('📦 ' + tgEsc(tgShort(t.subject, 200)));
   lines.push('📌 Статус: <b>' + tgEsc(t.status || '—') + '</b>' + (t.type ? ' · ' + tgEsc(t.type) : ''));
+  if (t.etp) lines.push('🏢 Площадка: <b>' + tgEsc(t.etp) + '</b>');
   if (t.deadline instanceof Date) lines.push('⏰ Подача до: <b>' + tgFmt(t.deadline, tz, true) + '</b> — ' + tgWhen(t.deadline, tz, now, true));
   if (t.auctionDate instanceof Date) lines.push('🔨 Торги / итоги: <b>' + tgFmt(t.auctionDate, tz, false) + '</b> — ' + tgWhen(t.auctionDate, tz, now, false));
   if (Number(t.nmck)) {

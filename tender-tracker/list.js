@@ -34,6 +34,7 @@ async function render() {
       <td>${esc(t.customer)}</td>
       <td><div class="subj">${esc(t.subject)}</div></td>
       <td>${esc(t.type)}</td>
+      <td>${esc(t.etp)}</td>
       <td class="money">${esc(fmtMoney(t.nmck))}</td>
       <td class="date">${esc(fmtDate(t.takenDate))}</td>
       <td class="date">${esc(fmtDate(t.deadline))}</td>
@@ -135,7 +136,7 @@ function download(name, content, type) {
 $('export').addEventListener('click', async () => {
   const tenders = await loadTenders();
   const cols = [
-    ['number', 'Номер'], ['customer', 'Заказчик'], ['subject', 'Предмет'], ['type', 'Тип'],
+    ['number', 'Номер'], ['customer', 'Заказчик'], ['subject', 'Предмет'], ['type', 'Тип'], ['etp', 'Площадка'],
     ['nmck', 'НМЦК'], ['takenDate', 'Взяли в работу'], ['deadline', 'Срок подачи'],
     ['auctionDate', 'Торги / итоги'], ['status', 'Статус'], ['comment', 'Комментарий'], ['url', 'Ссылка']
   ];

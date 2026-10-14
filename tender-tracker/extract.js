@@ -156,5 +156,29 @@ function extractTender() {
     /^Дата (и время )?рассмотрения/i
   ], hasDate), false);
 
-  return { number, customer, subject, type, nmck, deadline, auctionDate, url: location.href };
+  // --- Электронная площадка (где пройдут торги) ---
+  const ETP_BY_HOST = [
+    [/rts-tender\.ru/i, 'РТС-тендер'], [/sberbank-ast\.ru/i, 'Сбербанк-АСТ'], [/roseltorg\.ru/i, 'Росэлторг'],
+    [/etpgpb\.ru/i, 'ЭТП ГПБ'], [/tektorg\.ru/i, 'ТЭК-Торг'], [/lot-online\.ru|rad\.ru/i, 'РАД (lot-online)'],
+    [/zakazrf\.ru/i, 'ZakazRF'], [/fabrikant\.ru/i, 'Фабрикант'], [/b2b-center\.ru/i, 'B2B-Center'],
+    [/astgoz\.ru/i, 'АСТ ГОЗ'], [/tender\.?pro/i, 'Tender.Pro'], [/berezka|agregatoreat/i, 'ЕАТ «Берёзка»']
+  ];
+  const etpByText = s => { const h = ETP_BY_HOST.find(([re]) => re.test(s || '')); return h ? h[1] : ''; };
+  let etp = findByLabel(
+    [/^Наименование электронной площадки/i, /^(Электронная|Торговая) площадка/i, /^Наименование оператора электронной площадки/i, /^ЭТП\b/i],
+    v => v.length > 1 && v.length < 120 && !/^в информационно/i.test(v)
+  );
+  // вместо названия бывает адрес площадки (223-ФЗ) или соседняя строка «Адрес электронной площадки… http://…»
+  if (!etp || /https?:|www\.|^Адрес/i.test(etp)) etp = etpByText(etp) || etpByText(location.hostname) ||
+    etpByText(findByLabel([/^Адрес электронной площадки/i], v => /\./.test(v)));
+  // единые короткие названия, чтобы таблицу было удобно фильтровать по площадке
+  const ETP_BY_NAME = [
+    [/РТС/i, 'РТС-тендер'], [/Сбер/i, 'Сбербанк-АСТ'], [/ЕЭТП|Росэлторг/i, 'Росэлторг'], [/ГПБ|Газпромбанк/i, 'ЭТП ГПБ'],
+    [/ТЭК/i, 'ТЭК-Торг'], [/РАД|аукционный дом/i, 'РАД (lot-online)'], [/АГЗ|ZakazRF/i, 'ZakazRF'],
+    [/Фабрикант/i, 'Фабрикант'], [/B2B/i, 'B2B-Center'], [/АСТ ГОЗ/i, 'АСТ ГОЗ'], [/Берёзк|Березк/i, 'ЕАТ «Берёзка»']
+  ];
+  const named = ETP_BY_NAME.find(([re]) => re.test(etp || ''));
+  if (named) etp = named[1];
+
+  return { number, customer, subject, type, nmck, deadline, auctionDate, etp, url: location.href };
 }

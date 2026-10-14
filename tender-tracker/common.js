@@ -11,6 +11,9 @@ const TYPES = [
   'Коммерческая / 223-ФЗ',
   'Другое'
 ];
+// Подсказки для поля «Площадка (ЭТП)» — можно вписать и любую другую
+const ETPS = ['РТС-тендер', 'Сбербанк-АСТ', 'Росэлторг', 'ЭТП ГПБ', 'ТЭК-Торг', 'РАД (lot-online)', 'ZakazRF',
+  'Фабрикант', 'B2B-Center', 'АСТ ГОЗ', 'Tender.Pro', 'ЕАТ «Берёзка»', 'Малые закупки Крыма'];
 
 async function loadTenders() {
   const { tenders = [] } = await chrome.storage.local.get('tenders');

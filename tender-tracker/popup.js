@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
-const FIELDS = ['number', 'customer', 'subject', 'type', 'nmck', 'takenDate', 'deadline', 'auctionDate', 'status', 'comment', 'url'];
-const AUTO_FIELDS = ['number', 'customer', 'subject', 'type', 'nmck', 'deadline', 'auctionDate'];
+const FIELDS = ['number', 'customer', 'subject', 'type', 'nmck', 'etp', 'takenDate', 'deadline', 'auctionDate', 'status', 'comment', 'url'];
+const AUTO_FIELDS = ['number', 'customer', 'subject', 'type', 'nmck', 'etp', 'deadline', 'auctionDate'];
 
 const params = new URLSearchParams(location.search);
 const editId = params.get('id'); // открыто из таблицы для редактирования
@@ -39,6 +39,7 @@ async function readPage(tab) {
 async function init() {
   fillSelect($('type'), TYPES, true);
   fillSelect($('status'), STATUSES, false);
+  $('etpList').innerHTML = ETPS.map(v => `<option value="${v}">`).join('');
   const tenders = await loadTenders();
 
   if (editId) {
@@ -61,7 +62,14 @@ async function init() {
     current = existing;
     fillForm(current);
     $('delete').hidden = false;
-    setInfo('Этот тендер уже в базе — обновите статус или данные', 'ok');
+    // площадка появилась позже — дозаполняем у старых записей, если на странице она есть
+    if (!current.etp && data && data.etp) {
+      $('etp').value = data.etp;
+      $('etp').classList.add('auto');
+      setInfo('Этот тендер уже в базе. Найдена площадка — нажмите «Сохранить», чтобы дописать её в таблицу', 'ok');
+    } else {
+      setInfo('Этот тендер уже в базе — обновите статус или данные', 'ok');
+    }
     return;
   }
 

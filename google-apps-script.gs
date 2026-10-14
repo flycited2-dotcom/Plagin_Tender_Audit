@@ -16,15 +16,16 @@ const COLS = [
   ['deadline', 'Срок подачи', 110, 'center'],
   ['left', 'Осталось', 105, 'center'],        // считается формулой
   ['customer', 'Заказчик', 220, 'left'],
-  ['subject', 'Предмет закупки', 280, 'left'],
+  ['subject', 'Предмет закупки', 260, 'left'],
   ['type', 'Тип закупки', 120, 'center'],
   ['nmck', 'НМЦК, ₽', 115, 'right'],
   ['auctionDate', 'Торги / итоги', 95, 'center'],
   ['takenDate', 'Взяли в работу', 90, 'center'],
-  ['comment', 'Комментарий', 240, 'left'],
+  ['comment', 'Комментарий', 220, 'left'],
   ['number', '№ закупки (ссылка)', 150, 'center'],
   ['updatedAt', 'Обновлено', 110, 'center'],
-  ['id', 'ID', 60, 'left'] // служебная колонка, по ней обновляются строки
+  ['id', 'ID', 60, 'left'], // служебная колонка (скрыта), по ней обновляются строки
+  ['etp', 'Площадка (ЭТП)', 140, 'center'] // столбец N
 ];
 // Заголовки прошлых версий листа — чтобы перенести данные при перестройке
 const LEGACY_LABELS = { 'Номер': 'number', 'Ссылка': 'url', 'Предмет': 'subject' };
@@ -321,6 +322,9 @@ function setFormulaSafe(range, f) {
 }
 
 function upsert(sh, t) {
+  // старые записи из расширений не знают площадку — не затираем уже заполненную в таблице
+  const existing = findRow(sh, t.id);
+  if (existing && !t.etp) t.etp = sh.getRange(existing, col('etp')).getValue();
   const values = COLS.map(([k]) => {
     const v = t[k];
     if (k === 'left') return '';
@@ -328,7 +332,7 @@ function upsert(sh, t) {
     if (['takenDate', 'deadline', 'auctionDate', 'updatedAt'].includes(k)) return toDate(v);
     return v == null ? '' : v;
   });
-  const row = findRow(sh, t.id) || sh.getLastRow() + 1;
+  const row = existing || sh.getLastRow() + 1;
   sh.getRange(row, 1, 1, COLS.length).setValues([values]);
   setFormulaSafe(sh.getRange(row, col('left')), leftFormula(row));
   sh.getRange(row, col('status')).setDataValidation(
