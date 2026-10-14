@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Учёт тендеров",
+  "version": "1.1.0",
+  "description": "Быстрое сохранение тендеров с площадок: автораспознавание полей, статусы, сроки, Google Таблица, экспорт в Excel.",
+  "permissions": ["storage", "activeTab", "scripting", "alarms"],
+  "host_permissions": [
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*"
+  ],
+  "action": {
+    "default_title": "Сохранить тендер",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

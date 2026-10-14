@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Тендер</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="popup">
+  <header>
+    <h1>Тендер</h1>
+    <button id="openList" class="link" type="button">Все тендеры →</button>
+  </header>
+
+  <div id="info" class="info"></div>
+
+  <form id="form">
+    <label>Номер закупки<input id="number"></label>
+    <label>Заказчик<input id="customer"></label>
+    <label>Предмет<textarea id="subject" rows="2"></textarea></label>
+    <div class="row">
+      <label>Тип закупки<select id="type"></select></label>
+      <label>НМЦК, ₽<input id="nmck" inputmode="decimal"></label>
+    </div>
+    <div class="row">
+      <label>Взяли в работу<input id="takenDate" type="date"></label>
+      <label>Статус<select id="status"></select></label>
+    </div>
+    <div class="row">
+      <label>Срок подачи заявки<input id="deadline" type="datetime-local"></label>
+      <label>Дата торгов / итогов<input id="auctionDate" type="date"></label>
+    </div>
+    <label>Комментарий<textarea id="comment" rows="2"></textarea></label>
+    <label>Ссылка<input id="url"></label>
+
+    <div class="actions">
+      <button type="submit" class="primary">Сохранить</button>
+      <button type="button" id="delete" class="danger" hidden>Удалить</button>
+    </div>
+  </form>
+
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="extract.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

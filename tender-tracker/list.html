@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Тендеры</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="list">
+  <div class="toolbar">
+    <h1>Тендеры</h1>
+    <input id="search" type="search" placeholder="Поиск: номер, заказчик, предмет">
+    <select id="filter"></select>
+    <button id="export" class="btn" type="button">Экспорт в Excel</button>
+    <button id="backup" class="btn" type="button">Резервная копия</button>
+    <button id="restoreBtn" class="btn" type="button">Восстановить</button>
+    <input id="restore" type="file" accept=".json" hidden>
+  </div>
+
+  <details id="sheetBox" class="sheet-box">
+    <summary>Google Таблица: <span id="sheetState">не подключена</span></summary>
+    <div class="sheet-form">
+      <label>Адрес веб-приложения (Apps Script)
+        <input id="sheetUrl" placeholder="https://script.google.com/macros/s/…/exec">
+      </label>
+      <label>Ключ доступа (как TOKEN в скрипте)
+        <input id="sheetToken" placeholder="ваш ключ">
+      </label>
+      <div class="sheet-actions">
+        <button id="sheetSave" class="primary" type="button">Сохранить и проверить</button>
+        <button id="syncNow" class="btn" type="button">Отправить в таблицу</button>
+        <span id="sheetMsg" class="sheet-msg"></span>
+      </div>
+    </div>
+  </details>
+  <div class="legend">
+    Сроки: <span class="overdue-l" style="background:var(--overdue)">просрочено</span><span style="background:var(--red)">≤ 3 дней</span><span style="background:var(--yellow)">≤ 7 дней</span>
+    · Пока статус «Новый»/«В работе» — следим за сроком подачи, после «Подано» — за датой торгов.
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Номер</th><th>Заказчик</th><th>Предмет</th><th>Тип</th><th>НМЦК, ₽</th>
+        <th>Взяли</th><th>Подача до</th><th>Торги / итоги</th><th>Статус</th><th>Комментарий</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="empty" class="empty" hidden>Пока пусто. Откройте страницу закупки и нажмите на иконку расширения.</div>
+
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="list.js"></script>
+</body>
+</html>
