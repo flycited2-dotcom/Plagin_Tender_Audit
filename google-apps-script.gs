@@ -40,6 +40,16 @@ const STATUS_STYLE = {
   'Проиграли': ['#f4cccc', '#990000'],
   'Отказ': ['#e8eaed', '#80868b']
 };
+// Шкала НМЦК: от (включительно), до (не включая; null — без верхней границы), фон, текст, жирный, подпись
+const NMCK_TIERS = [
+  [0, 100000, '#eceff1', '#90a4ae', false, 'до 100 тыс. — «мусорные»'],
+  [100000, 300000, '#e3f2fd', '#0d47a1', false, '100–300 тыс.'],
+  [300000, 700000, '#d0f0ec', '#00695c', false, '300–700 тыс.'],
+  [700000, 1000000, '#fff2cc', '#7f6000', false, '700 тыс. – 1 млн'],
+  [1000000, 1500000, '#fcd9b6', '#a64d00', true, '1–1,5 млн'],
+  [1500000, 2000000, '#f4b6b6', '#8b0000', true, '1,5–2 млн'],
+  [2000000, null, '#7e57c2', '#ffffff', true, 'свыше 2 млн']
+];
 const HEADER_BG = '#1f3864';
 const MIN_ROW_HEIGHT = 48;
 
@@ -211,6 +221,7 @@ function setupSheet(sh) {
   sh.getRange(1, 1, sh.getMaxRows(), n).createFilter();
 
   sh.setConditionalFormatRules(buildRules(sh, rows));
+  sh.getRange(1, col('nmck')).setNote('Цвет суммы:\n' + NMCK_TIERS.map(t => '• ' + t[5]).join('\n'));
   sh.hideColumns(col('id'));
 }
 
@@ -257,6 +268,15 @@ function buildRules(sh, rows) {
   // 3. Завершённые тендеры — вся строка бледная
   add(sh.getRange(2, 1, rows, COLS.length), `=OR(${S}="Выиграли",${S}="Проиграли",${S}="Отказ")`,
     null, '#9aa0a6', false);
+
+  // 4. Шкала НМЦК: чем крупнее тендер, тем «теплее» цвет (у завершённых не красится — сработало правило 3)
+  const nmckRange = sh.getRange(2, col('nmck'), rows);
+  NMCK_TIERS.forEach(([from, to, bg, color, bold]) => {
+    let b = SpreadsheetApp.newConditionalFormatRule().setBackground(bg).setFontColor(color).setRanges([nmckRange]);
+    b = to === null ? b.whenNumberGreaterThanOrEqualTo(from) : b.whenNumberBetween(from, to - 0.01);
+    if (bold) b = b.setBold(true);
+    rules.push(b.build());
+  });
   return rules;
 }
 
