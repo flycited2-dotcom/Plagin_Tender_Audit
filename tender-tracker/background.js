@@ -7,6 +7,11 @@ async function updateBadge() {
   const n = tenders.filter(t => ['red', 'overdue'].includes(urgency(t))).length;
   await chrome.action.setBadgeBackgroundColor({ color: '#d93025' });
   await chrome.action.setBadgeText({ text: n ? String(n) : '' });
+  // подсказка при наведении на иконку — что значит цифра
+  await chrome.action.setTitle({
+    title: n ? `Учёт тендеров — горит: ${n} (срок ≤ 3 дней или уже просрочен). Нажмите, чтобы сохранить тендер`
+             : 'Учёт тендеров — сохранить тендер'
+  });
 }
 
 function ensureAlarm() {

@@ -13,19 +13,22 @@
 
   <div id="info" class="info"></div>
 
+  <!-- компактная раскладка: всё окно помещается без прокрутки (у Chrome предел высоты окна — 600 px) -->
   <form id="form">
-    <label>Номер закупки<input id="number"></label>
+    <div class="row">
+      <label class="wide">Номер закупки<input id="number"></label>
+      <label>НМЦК, ₽<input id="nmck" inputmode="decimal"></label>
+    </div>
     <label>Заказчик<input id="customer"></label>
     <label>Предмет<textarea id="subject" rows="2"></textarea></label>
     <div class="row">
       <label>Тип закупки<select id="type"></select></label>
-      <label>НМЦК, ₽<input id="nmck" inputmode="decimal"></label>
+      <label>Площадка (ЭТП)<input id="etp" list="etpList" placeholder="где пройдут торги"></label>
     </div>
-    <label>Площадка (ЭТП)<input id="etp" list="etpList" placeholder="где пройдут торги"></label>
     <datalist id="etpList"></datalist>
     <div class="row">
-      <label>Взяли в работу<input id="takenDate" type="date"></label>
       <label>Статус<select id="status"></select></label>
+      <label>Взяли в работу<input id="takenDate" type="date"></label>
     </div>
     <div class="row">
       <label>Срок подачи заявки<input id="deadline" type="datetime-local"></label>

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Учёт тендеров
 // @namespace    plagin-tender-audit
-// @version      1.2.0
+// @version      1.3.0
 // @updateURL    https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @downloadURL  https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @description  Кнопка «В учёт» на страницах закупок: поля заполняются сами, тендер уходит в Google Таблицу
@@ -20,6 +20,9 @@
 // @match        https://*.lot-online.ru/*
 // @match        https://*.zakazrf.ru/*
 // @match        https://*.rad.ru/*
+// @match        https://agregatoreat.ru/*
+// @match        https://*.agregatoreat.ru/*
+// @match        https://*.tender.pro/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -42,7 +45,7 @@
 
   const STATUSES = ['Новый', 'В работе', 'Подано', 'Торги', 'Выиграли', 'Проиграли', 'Отказ'];
   const TYPES = ['Электронный аукцион', 'Конкурс', 'Запрос котировок', 'Запрос предложений',
-    'Ед. поставщик', 'Коммерческая / 223-ФЗ', 'Другое'];
+    'Ед. поставщик', 'Закупка малого объёма', 'Коммерческая / 223-ФЗ', 'Другое'];
   const ETPS = ['РТС-тендер', 'Сбербанк-АСТ', 'Росэлторг', 'ЭТП ГПБ', 'ТЭК-Торг', 'РАД (lot-online)', 'ZakazRF',
     'Фабрикант', 'B2B-Center', 'АСТ ГОЗ', 'Tender.Pro', 'ЕАТ «Берёзка»', 'Малые закупки Крыма'];
   const FIELDS = ['number', 'customer', 'subject', 'type', 'nmck', 'etp', 'takenDate', 'deadline', 'auctionDate', 'status', 'comment', 'url'];
