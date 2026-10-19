@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Учёт тендеров
 // @namespace    plagin-tender-audit
-// @version      1.3.1
+// @version      1.3.2
 // @updateURL    https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @downloadURL  https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @description  Кнопка «В учёт» на страницах закупок: поля заполняются сами, тендер уходит в Google Таблицу
@@ -43,7 +43,7 @@
   // «⚙ Настройки таблицы»; локальная сборка (*.local.user.js) берёт их из tender-tracker/config.js.
   const DEFAULT_SETTINGS = { url: '', token: '', sheetUrl: '' };
 
-  const STATUSES = ['Новый', 'В работе', 'Подано', 'Торги', 'Выиграли', 'Проиграли', 'Отказ'];
+  const STATUSES = ['Новый', 'В работе', 'Подано', 'Торги', 'Выиграли', 'Проиграли', 'Не состоялся', 'Опоздали', 'Отказ'];
   const TYPES = ['Электронный аукцион', 'Конкурс', 'Запрос котировок', 'Запрос предложений',
     'Ед. поставщик', 'Закупка малого объёма', 'Коммерческая / 223-ФЗ', 'Другое'];
   const ETPS = ['РТС-тендер', 'Сбербанк-АСТ', 'Росэлторг', 'ЭТП ГПБ', 'ТЭК-Торг', 'РАД (lot-online)', 'ZakazRF',
