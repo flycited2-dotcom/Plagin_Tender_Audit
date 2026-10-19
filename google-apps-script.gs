@@ -90,8 +90,17 @@ function doPost(e) {
     const sh = getSheet();
     if (req.action === 'ping') return out({ ok: true });
     if (req.action === 'upsert') {
-      (req.tenders || []).forEach(t => upsert(sh, t));
-      return out({ ok: true, count: (req.tenders || []).length });
+      const res = (req.tenders || []).map(t => {
+        const from = t.id;
+        const r = upsert(sh, t);
+        return { from, to: r.id, merged: r.merged };
+      });
+      // merged — записи, которые пришли с другим ID, но совпали по номеру закупки с уже существующей строкой
+      return out({ ok: true, count: res.length, merged: res.filter(r => r.merged) });
+    }
+    if (req.action === 'find') {
+      const row = findRowByNumber(sh, req.number);
+      return out({ ok: true, found: row ? recordForClient(readRow(sh, row)) : null });
     }
     if (req.action === 'delete') {
       const row = findRow(sh, req.id);
@@ -266,11 +275,16 @@ function buildRules(sh, rows) {
   urgency(sh.getRange(2, col('deadline'), rows), active);
   urgency(sh.getRange(2, col('auctionDate'), rows), sent);
 
-  // 3. Завершённые тендеры — вся строка бледная
+  // 3. Дубли: номер закупки встречается в таблице больше одного раза — оранжевый
+  const K = `$${letter(col('number'))}2`;
+  const KK = `$${letter(col('number'))}$2:$${letter(col('number'))}`;
+  add(sh.getRange(2, col('number'), rows), `=AND(${K}<>"",COUNTIF(${KK},${K})>1)`, '#ffd8a8', '#7a3e00', true);
+
+  // 4. Завершённые тендеры — вся строка бледная
   add(sh.getRange(2, 1, rows, COLS.length), `=OR(${S}="Выиграли",${S}="Проиграли",${S}="Отказ")`,
     null, '#9aa0a6', false);
 
-  // 4. Шкала НМЦК: чем крупнее тендер, тем «теплее» цвет (у завершённых не красится — сработало правило 3)
+  // 5. Шкала НМЦК: чем крупнее тендер, тем «теплее» цвет (у завершённых не красится — сработало правило 4)
   const nmckRange = sh.getRange(2, col('nmck'), rows);
   NMCK_TIERS.forEach(([from, to, bg, color, bold]) => {
     let b = SpreadsheetApp.newConditionalFormatRule().setBackground(bg).setFontColor(color).setRanges([nmckRange]);
@@ -288,10 +302,76 @@ function findRow(sh, id) {
   return i < 0 ? 0 : i + 2;
 }
 
+// ---------- дубли ----------
+
+const normNum = s => String(s || '').replace(/\D/g, '');
+
+// Строка с тем же номером закупки (номер сравнивается только по цифрам)
+function findRowByNumber(sh, number) {
+  const n = normNum(number);
+  if (n.length < 6 || sh.getLastRow() < 2) return 0;
+  const nums = sh.getRange(2, col('number'), sh.getLastRow() - 1).getDisplayValues();
+  const i = nums.findIndex(r => normNum(r[0]) === n);
+  return i < 0 ? 0 : i + 2;
+}
+
+// Строка листа → запись (ключи COLS, ссылка — из номера закупки)
+function readRow(sh, row) {
+  const range = sh.getRange(row, 1, 1, COLS.length);
+  const v = range.getValues()[0];
+  const link = range.getRichTextValues()[0][col('number') - 1];
+  const t = {};
+  COLS.forEach(([k], i) => { if (k !== 'left') t[k] = v[i]; });
+  const url = link && link.getLinkUrl();
+  if (url) t.url = url;
+  if (t.number === 'открыть') t.number = '';
+  return t;
+}
+
+// Запись для расширения: даты — в формате полей формы
+function recordForClient(t) {
+  const tz = book().getSpreadsheetTimeZone();
+  const f = (d, p) => d instanceof Date ? Utilities.formatDate(d, tz, p) : (d || '');
+  return Object.assign({}, t, {
+    takenDate: f(t.takenDate, 'yyyy-MM-dd'),
+    deadline: f(t.deadline, "yyyy-MM-dd'T'HH:mm"),
+    auctionDate: f(t.auctionDate, 'yyyy-MM-dd'),
+    updatedAt: t.updatedAt instanceof Date ? t.updatedAt.toISOString() : (t.updatedAt || ''),
+    nmck: t.nmck === '' || t.nmck == null ? '' : String(t.nmck)
+  });
+}
+
+// Склеить уже существующие дубли (запускать вручную кнопкой «Выполнить»):
+// остаётся самая свежая строка, пустые поля в ней дозаполняются из остальных, лишние строки удаляются
+function dedupe() {
+  const sh = getSheet();
+  const last = sh.getLastRow();
+  if (last < 3) return 'Дублей нет';
+  const nums = sh.getRange(2, col('number'), last - 1).getDisplayValues();
+  const groups = {};
+  nums.forEach((r, i) => { const n = normNum(r[0]); if (n.length >= 6) (groups[n] = groups[n] || []).push(i + 2); });
+  const toDelete = [];
+  Object.values(groups).filter(rows => rows.length > 1).forEach(rows => {
+    const recs = rows.map(r => ({ row: r, t: readRow(sh, r) }))
+      .sort((a, b) => (b.t.updatedAt instanceof Date ? b.t.updatedAt : 0) - (a.t.updatedAt instanceof Date ? a.t.updatedAt : 0));
+    const keep = recs[0].t;
+    recs.slice(1).forEach(({ t }) => {
+      Object.keys(t).forEach(k => { if ((keep[k] === '' || keep[k] == null) && t[k] !== '' && t[k] != null) keep[k] = t[k]; });
+    });
+    upsert(sh, keep);
+    recs.slice(1).forEach(({ row }) => toDelete.push(row));
+  });
+  toDelete.sort((a, b) => b - a).forEach(r => sh.deleteRow(r));
+  const msg = toDelete.length ? 'Удалено дублей: ' + toDelete.length : 'Дублей нет';
+  Logger.log(msg);
+  return msg;
+}
+
 // "2026-10-21T10:00" / "2026-10-21" (местное время) → дата в часовом поясе таблицы;
 // "…Z" (момент времени UTC, напр. updatedAt) → как есть
 function toDate(v) {
   if (!v) return '';
+  if (v instanceof Date) return v;
   const s = String(v);
   if (/Z$|[+-]\d\d:\d\d$/.test(s)) return new Date(s);
   const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}))?/);
@@ -321,10 +401,25 @@ function setFormulaSafe(range, f) {
   }
 }
 
+// Добавить или обновить тендер. Ищется по ID, а если такого ID нет — по номеру закупки,
+// чтобы один тендер из разных браузеров не превращался в две строки.
 function upsert(sh, t) {
-  // старые записи из расширений не знают площадку — не затираем уже заполненную в таблице
-  const existing = findRow(sh, t.id);
-  if (existing && !t.etp) t.etp = sh.getRange(existing, col('etp')).getValue();
+  let existing = findRow(sh, t.id);
+  let merged = false;
+  if (!existing) {
+    existing = findRowByNumber(sh, t.number);
+    merged = !!existing;
+  }
+  if (existing) {
+    // пустые поля не затирают уже заполненные (старые записи без площадки, другой браузер и т.п.)
+    const old = readRow(sh, existing);
+    COLS.forEach(([k]) => {
+      if (k !== 'left' && (t[k] === '' || t[k] == null) && old[k] !== '' && old[k] != null) t[k] = old[k];
+    });
+    if (!t.url && old.url) t.url = old.url;
+    if (old.number && normNum(old.number) === normNum(t.number)) t.number = old.number; // номер в прежнем виде
+    if (merged && old.id) t.id = old.id; // строка сохраняет свой ID
+  }
   const values = COLS.map(([k]) => {
     const v = t[k];
     if (k === 'left') return '';
@@ -346,4 +441,5 @@ function upsert(sh, t) {
   SpreadsheetApp.flush();
   sh.autoResizeRows(row, 1);
   if (sh.getRowHeight(row) < MIN_ROW_HEIGHT) sh.setRowHeight(row, MIN_ROW_HEIGHT);
+  return { id: t.id, merged };
 }

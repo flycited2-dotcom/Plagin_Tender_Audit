@@ -86,6 +86,24 @@ async function init() {
   if (!data) setInfo('Страницу прочитать не удалось — заполните вручную', 'warn');
   else if (found === 0) setInfo('Поля не распознаны — заполните вручную', 'warn');
   else setInfo(`Распознано полей: ${found} из ${AUTO_FIELDS.length}. Зелёные — заполнены автоматически, проверьте их.`, 'ok');
+
+  // защита от дублей: такой номер уже есть в таблице (например, сохранён из другого браузера)?
+  if (current.number) checkSheetDuplicate(current.number);
+}
+
+async function checkSheetDuplicate(number) {
+  const res = await sheetFind(number);
+  if (!res.ok || !res.found || current.id) return;
+  const f = res.found;
+  // берём запись из таблицы, а пустые поля дополняем распознанным со страницы
+  const merged = { ...f };
+  for (const k of FIELDS) if (!merged[k] && current[k]) merged[k] = current[k];
+  current = merged;
+  fillForm(current);
+  for (const k of FIELDS) $(k).classList.remove('auto');
+  const when = f.updatedAt ? new Date(f.updatedAt).toLocaleDateString('ru-RU') : '';
+  setInfo(`⚠️ Этот тендер уже есть в таблице (статус «${f.status || '—'}»${when ? ', обновлён ' + when : ''}). ` +
+    'Открыта существующая запись — «Сохранить» обновит её, дубля не будет.', 'warn');
 }
 
 $('form').addEventListener('input', e => e.target.classList.remove('auto'));

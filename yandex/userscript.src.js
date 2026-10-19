@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Учёт тендеров
 // @namespace    plagin-tender-audit
-// @version      1.1.0
+// @version      1.2.0
 // @updateURL    https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @downloadURL  https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @description  Кнопка «В учёт» на страницах закупок: поля заполняются сами, тендер уходит в Google Таблицу
@@ -103,7 +103,34 @@
     const ids = records.map(r => r.id);
     q.upsert = res.ok ? q.upsert.filter(id => !ids.includes(id)) : Array.from(new Set(q.upsert.concat(ids)));
     saveQueue(q);
+    // таблица склеила запись с уже существующей строкой (тот же номер) — берём её ID
+    if (res.ok && res.merged && res.merged.length) {
+      const store = loadStore();
+      res.merged.forEach(m => {
+        if (m.to && m.to !== m.from && store[m.from]) {
+          store[m.to] = Object.assign({}, store[m.from], { id: m.to });
+          delete store[m.from];
+          if (current && current.id === m.from) current.id = m.to;
+        }
+      });
+      saveStore(store);
+    }
     return res;
+  }
+
+  // Защита от дублей: такой номер уже есть в таблице (например, сохранён из другого браузера)?
+  async function checkSheetDuplicate(number) {
+    const res = await post({ action: 'find', number });
+    if (!res.ok || !res.found || current.id) return;
+    const f = res.found;
+    const merged = Object.assign({}, f);
+    for (const k of FIELDS) if (!merged[k] && current[k]) merged[k] = current[k];
+    current = merged;
+    fillForm(current);
+    for (const k of FIELDS) field(k).classList.remove('auto');
+    const when = f.updatedAt ? new Date(f.updatedAt).toLocaleDateString('ru-RU') : '';
+    setInfo(`⚠️ Этот тендер уже есть в таблице (статус «${f.status || '—'}»${when ? ', обновлён ' + when : ''}). ` +
+      'Открыта существующая запись — «Сохранить» обновит её, дубля не будет.', 'warn');
   }
 
   async function sendDelete(id) {
@@ -264,6 +291,7 @@
       setInfo(found
         ? `Распознано полей: ${found} из ${AUTO_FIELDS.length}. Зелёные — заполнены сами, проверьте их.`
         : 'Поля не распознаны — заполните вручную', found ? 'ok' : 'warn');
+      if (current.number) checkSheetDuplicate(current.number);
     }
     if (!s.url) setInfo('Таблица не подключена: меню Tampermonkey → «⚙ Настройки таблицы». Сохранить можно и сейчас — отправится позже.', 'warn');
     panel.classList.add('open');

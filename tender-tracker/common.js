@@ -106,12 +106,34 @@ async function syncTenders(list) {
   const res = await sheetRequest({ action: 'upsert', tenders: list });
   if (res.ok) {
     const ids = new Set(list.map(t => t.id));
+    // таблица склеила запись с уже существующей строкой (тот же номер) — берём её ID, чтобы дальше обновлять ту же строку
+    const renamed = Object.fromEntries((res.merged || []).filter(m => m.to && m.to !== m.from).map(m => [m.from, m.to]));
     const now = new Date().toISOString();
     const tenders = await loadTenders();
-    for (const t of tenders) if (ids.has(t.id)) t.syncedAt = now;
-    await saveTenders(tenders);
+    for (const t of tenders) {
+      if (!ids.has(t.id)) continue;
+      t.syncedAt = now;
+      if (renamed[t.id]) t.id = renamed[t.id];
+    }
+    await saveTenders(dedupeLocal(tenders));
   }
   return res;
+}
+
+// Есть ли уже такой тендер в таблице (по номеру закупки). { ok, found: запись | null }
+async function sheetFind(number) {
+  if (!number) return { ok: true, found: null };
+  return sheetRequest({ action: 'find', number });
+}
+
+// Убрать локальные дубли с одинаковым ID (после склейки), оставив самую свежую запись
+function dedupeLocal(tenders) {
+  const byId = new Map();
+  for (const t of tenders) {
+    const prev = byId.get(t.id);
+    if (!prev || (t.updatedAt || '') > (prev.updatedAt || '')) byId.set(t.id, t);
+  }
+  return [...byId.values()];
 }
 
 // Удалить строку из таблицы; если не получилось — повторим позже
