@@ -413,6 +413,9 @@ function upsert(sh, t) {
   if (existing) {
     // пустые поля не затирают уже заполненные (старые записи без площадки, другой браузер и т.п.)
     const old = readRow(sh, existing);
+    // Google-таблица — источник статуса существующей закупки.
+    // Старые копии браузеров не должны возвращать ручной «Отказ» в «Новый».
+    if (old.status !== '' && old.status != null) t.status = old.status;
     COLS.forEach(([k]) => {
       if (k !== 'left' && (t[k] === '' || t[k] == null) && old[k] !== '' && old[k] != null) t[k] = old[k];
     });
