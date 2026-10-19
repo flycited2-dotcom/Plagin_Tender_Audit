@@ -8,6 +8,9 @@ function extractTender() {
   const bodyText = document.body ? document.body.innerText : '';
   const lines = bodyText.split('\n').map(clean).filter(Boolean);
 
+  // служебные скрытые подписи ExtJS (Росэлторг): «Cell value has been edited» и т.п.
+  // Проверяем только сам элемент: этим же классом ExtJS прячет целые неактивные вкладки с нужными данными
+  const isHelper = el => !!(el && el.matches('.x-hidden-offsets, .x-hidden-display'));
   const cache = new Map();
   const txt = el => {
     if (!cache.has(el)) cache.set(el, clean(el.textContent));
@@ -15,7 +18,7 @@ function extractTender() {
   };
   const candidates = Array.from(
     document.querySelectorAll('span,div,td,th,dt,dd,label,p,b,strong,h2,h3,h4,li')
-  ).filter(el => el.childElementCount <= 3 && txt(el).length <= 200);
+  ).filter(el => el.childElementCount <= 3 && txt(el).length <= 200 && !isHelper(el));
 
   const notEmpty = v => v.length > 2;
 
@@ -34,9 +37,12 @@ function extractTender() {
         const inline = clean(tail.replace(/^[\s:：–—-]+/, ''));
         const siblings = [];
         if (el.tagName !== 'TH') { // у заголовка таблицы сосед — тоже заголовок, а не значение
-          if (el.nextElementSibling) siblings.push(txt(el.nextElementSibling));
+          if (el.nextElementSibling && !isHelper(el.nextElementSibling)) siblings.push(txt(el.nextElementSibling));
           const p = el.parentElement;
           if (p && p.nextElementSibling && p.childElementCount <= 3) siblings.push(clean(p.nextElementSibling.textContent));
+          // ExtJS (Росэлторг): подпись лежит внутри <label>, значение — следующий за ним блок
+          const lab = el.closest('label');
+          if (lab && lab.nextElementSibling) siblings.push(clean(lab.nextElementSibling.textContent));
         }
         // "Подпись: значение" — значение внутри; иначе сначала смотрим соседний элемент
         const options = /^\s*[:：]/.test(tail) ? [inline, ...siblings] : [...siblings, inline];
@@ -92,7 +98,7 @@ function extractTender() {
 
   // --- Заказчик ---
   let customer = findByLabel([
-    /^(Полное )?(наименование )?заказчика?\b/i,
+    /^(Полное )?(наименование )?заказчика?(?![а-яёa-z])/i, // \b после русских букв в JS не срабатывает
     /^Организация,? осуществляющая (размещение|закупку)/i,
     /^Размещение осуществляет/i,
     /^Организатор( закупки| торгов)?/i,
@@ -136,7 +142,7 @@ function extractTender() {
   // --- НМЦК ---
   let nmck = '';
   const priceText = findByLabel(
-    [/^Начальная \(?максимальная\)? цена/i, /^НМЦ[КД]?/i, /^Начальная цена/i, /^Цена (договора|контракта|лота)/i,
+    [/^Начальная \(?максимальная\)? цена/i, /^НМЦ[КД]?(?=\s*[:(]|\s*$)/i, // подпись, а не имя файла «НМЦК Карамелька 30кВт.xlsx» /^Начальная цена/i, /^Цена (договора|контракта|лота)/i,
       /^Стартовая( \/ максимальная)? цена/i, /^Максимальная цена/i], // ЕАТ: «Стартовая / Максимальная цена»
     v => /\d/.test(v)
   );
@@ -171,7 +177,7 @@ function extractTender() {
   ];
   const etpByText = s => { const h = ETP_BY_HOST.find(([re]) => re.test(s || '')); return h ? h[1] : ''; };
   let etp = findByLabel(
-    [/^Наименование электронной площадки/i, /^(Электронная|Торговая) площадка/i, /^Наименование оператора электронной площадки/i, /^ЭТП\b/i],
+    [/^Наименование электронной площадки/i, /^(Электронная|Торговая) площадка/i, /^Наименование оператора электронной площадки/i, /^ЭТП(?![а-яёa-z])/i],
     v => v.length > 1 && v.length < 120 && !/^в информационно/i.test(v)
   );
   // вместо названия бывает адрес площадки (223-ФЗ) или соседняя строка «Адрес электронной площадки… http://…»

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Учёт тендеров
 // @namespace    plagin-tender-audit
-// @version      1.3.0
+// @version      1.3.1
 // @updateURL    https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @downloadURL  https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @description  Кнопка «В учёт» на страницах закупок: поля заполняются сами, тендер уходит в Google Таблицу
