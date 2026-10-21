@@ -184,7 +184,10 @@ function tgCard(t, tz, now) {
   lines.push('📌 Статус: <b>' + tgEsc(t.status || '—') + '</b>' + (t.type ? ' · ' + tgEsc(t.type) : ''));
   if (t.etp) lines.push('🏢 Площадка: <b>' + tgEsc(t.etp) + '</b>');
   if (t.deadline instanceof Date) lines.push('⏰ Подача до: <b>' + tgFmt(t.deadline, tz, true) + '</b> — ' + tgWhen(t.deadline, tz, now, true));
-  if (t.auctionDate instanceof Date) lines.push('🔨 Торги / итоги: <b>' + tgFmt(t.auctionDate, tz, false) + '</b> — ' + tgWhen(t.auctionDate, tz, now, false));
+  if (t.auctionDate instanceof Date) {
+    const at = hasTime(t.auctionDate); // время начала торгов известно — «через 3 ч»
+    lines.push('🔨 Торги / итоги: <b>' + tgFmt(t.auctionDate, tz, at) + '</b> — ' + tgWhen(t.auctionDate, tz, now, at && t.auctionDate > now));
+  }
   if (Number(t.nmck)) {
     const mark = TG_MONEY_MARKS.find(([limit]) => Number(t.nmck) < limit)[1];
     lines.push(mark + ' НМЦК: <b>' + tgMoney(Number(t.nmck)) + '</b>');

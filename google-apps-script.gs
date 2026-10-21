@@ -14,12 +14,12 @@ function book() {
 const COLS = [
   ['status', 'Статус', 110, 'center'],
   ['deadline', 'Срок подачи', 110, 'center'],
-  ['left', 'Осталось', 105, 'center'],        // считается формулой
+  ['left', 'Осталось', 115, 'center'],        // считается формулой: дни + время торгов
   ['customer', 'Заказчик', 220, 'left'],
   ['subject', 'Предмет закупки', 260, 'left'],
   ['type', 'Тип закупки', 120, 'center'],
   ['nmck', 'НМЦК, ₽', 115, 'right'],
-  ['auctionDate', 'Торги / итоги', 95, 'center'],
+  ['auctionDate', 'Торги / итоги', 105, 'center'],
   ['takenDate', 'Взяли в работу', 90, 'center'],
   ['comment', 'Комментарий', 220, 'left'],
   ['number', '№ закупки (ссылка)', 150, 'center'],
@@ -54,7 +54,7 @@ const NMCK_TIERS = [
   [2000000, null, '#7e57c2', '#ffffff', true, 'свыше 2 млн']
 ];
 const HEADER_BG = '#1f3864';
-const MIN_ROW_HEIGHT = 48;
+const MIN_ROW_HEIGHT = 54; // три строки «Осталось»: «сегодня!», пусто, «торги 11:35»
 
 const col = key => COLS.findIndex(c => c[0] === key) + 1;
 function letter(n) {
@@ -174,7 +174,7 @@ function readRecords(sh) {
       if (k === 'url') return;
       const v = row[i];
       if (v instanceof Date) {
-        t[k] = k === 'updatedAt' ? v.toISOString() : fmt(v, k === 'deadline');
+        t[k] = k === 'updatedAt' ? v.toISOString() : fmt(v, k === 'deadline' || (k === 'auctionDate' && hasTime(v)));
       } else {
         t[k] = v === '' || v == null ? '' : String(v);
       }
@@ -210,8 +210,13 @@ function setupSheet(sh) {
   sh.getRange(2, col('status'), rows).setFontWeight('bold');
   sh.getRange(2, col('nmck'), rows).setNumberFormat('#,##0.00');
   sh.getRange(2, col('deadline'), rows).setNumberFormat('dd.MM.yyyy HH:mm');
-  sh.getRange(2, col('left'), rows).setNumberFormat('[<0]"просрочено";[=0]"сегодня!";0" дн."').setFontWeight('bold');
+  sh.getRange(2, col('left'), rows).setNumberFormat('@').setFontWeight('bold');
   sh.getRange(2, col('auctionDate'), rows).setNumberFormat('dd.MM.yyyy');
+  // уже заполненные строки: новая формула «Осталось», у торгов со временем показываем и время
+  for (let r = 2; r <= sh.getLastRow(); r++) {
+    setFormulaSafe(sh.getRange(r, col('left')), leftFormula(r));
+    setAuctionFormat(sh, r);
+  }
   sh.getRange(2, col('takenDate'), rows).setNumberFormat('dd.MM.yyyy');
   sh.getRange(2, col('updatedAt'), rows).setNumberFormat('dd.MM.yy HH:mm').setFontSize(8).setFontColor('#80868b');
   sh.getRange(2, col('number'), rows).setNumberFormat('@') // номер — текст, чтобы не терялись нули
@@ -241,11 +246,13 @@ function setupSheet(sh) {
 function buildRules(sh, rows) {
   const S = `$${letter(col('status'))}2`;
   const D = `$${letter(col('deadline'))}2`;
-  const C = `$${letter(col('left'))}2`; // «Осталось» — дней до ближайшего важного срока
+  const A = `$${letter(col('auctionDate'))}2`;
   const active = `OR(${S}="Новый",${S}="В работе")`;
   const sent = `OR(${S}="Подано",${S}="Торги")`;
+  // дней до ближайшего важного срока — то же число, что в «Осталось» (там теперь текст)
+  const C = `IF(${active},IF(${D}="","",INT(${D})-TODAY()),IF(${sent},IF(${A}="","",INT(${A})-TODAY()),""))`;
   // просрочено: срок подачи прошёл (с точностью до времени) или дата торгов уже позади
-  const over = `OR(AND(${active},${D}<>"",${D}<NOW()),AND(${C}<>"",${C}<0))`;
+  const over = `OR(AND(${active},${D}<>"",${D}<NOW()),AND(${sent},${A}<>"",INT(${A})<TODAY()))`;
 
   const rules = [];
   const add = (range, formula, bg, color, bold) => {
@@ -264,7 +271,7 @@ function buildRules(sh, rows) {
       .setBackground(bg).setFontColor(color).setBold(true).setRanges([statusRange]).build());
   });
 
-  // 2. Сроки: просрочено / ≤ 3 дней / ≤ 7 дней / есть время — по числу в «Осталось»,
+  // 2. Сроки: просрочено / ≤ 3 дней / ≤ 7 дней / есть время — по тому же числу дней, что в «Осталось»,
   //    чтобы цвет всегда совпадал с цифрой. Дата подачи красится до подачи, дата торгов — после.
   const urgency = (range, guard) => {
     const g = guard ? `${guard},` : '';
@@ -337,7 +344,7 @@ function recordForClient(t) {
   return Object.assign({}, t, {
     takenDate: f(t.takenDate, 'yyyy-MM-dd'),
     deadline: f(t.deadline, "yyyy-MM-dd'T'HH:mm"),
-    auctionDate: f(t.auctionDate, 'yyyy-MM-dd'),
+    auctionDate: f(t.auctionDate, t.auctionDate instanceof Date && hasTime(t.auctionDate) ? "yyyy-MM-dd'T'HH:mm" : 'yyyy-MM-dd'),
     updatedAt: t.updatedAt instanceof Date ? t.updatedAt.toISOString() : (t.updatedAt || ''),
     nmck: t.nmck === '' || t.nmck == null ? '' : String(t.nmck)
   });
@@ -382,13 +389,33 @@ function toDate(v) {
   return Utilities.parseDate(`${m[1]} ${m[2] || '00:00'}`, tz, 'yyyy-MM-dd HH:mm');
 }
 
-// Формула «Осталось дней» для строки: до подачи — до срока подачи, после — до даты торгов
+// У даты торгов указано время (не ровно полночь)
+function hasTime(d) {
+  return Utilities.formatDate(d, book().getSpreadsheetTimeZone(), 'HH:mm') !== '00:00';
+}
+
+// Дата торгов со временем — «дд.мм.гггг чч:мм», без времени — только дата
+function setAuctionFormat(sh, row, v) {
+  const cell = sh.getRange(row, col('auctionDate'));
+  if (v === undefined) v = cell.getValue();
+  cell.setNumberFormat(v instanceof Date && hasTime(v) ? 'dd.MM.yyyy HH:mm' : 'dd.MM.yyyy');
+}
+
+// Формула «Осталось» для строки. Первая строка — дни: до подачи — до срока подачи, после — до даты торгов
+// («просрочено» / «сегодня!» / «N дн.»). Через пустую строку — начало торгов: «торги 11:35»
+// (если торги не сегодня — «торги 23.10 11:35»), пока тендер не завершён и торги не прошли.
 function leftFormula(row) {
   const S = `${letter(col('status'))}${row}`;
   const D = `${letter(col('deadline'))}${row}`;
   const A = `${letter(col('auctionDate'))}${row}`;
-  return `=IF(OR(${S}="Новый",${S}="В работе"),IF(${D}="","",INT(${D})-TODAY()),` +
-    `IF(OR(${S}="Подано",${S}="Торги"),IF(${A}="","",${A}-TODAY()),""))`;
+  const active = `OR(${S}="Новый",${S}="В работе")`;
+  const sent = `OR(${S}="Подано",${S}="Торги")`;
+  const word = n => `IF(${n}<0,"просрочено",IF(${n}=0,"сегодня!",${n}&" дн."))`;
+  const days = `IF(${active},IF(${D}="","",${word(`(INT(${D})-TODAY())`)}),` +
+    `IF(${sent},IF(${A}="","",${word(`(INT(${A})-TODAY())`)}),""))`;
+  const when = `TRIM(IF(INT(${A})=TODAY(),"",TEXT(${A},"dd.MM"))&" "&IF(MOD(${A},1)=0,"",TEXT(${A},"HH:mm")))`;
+  const auction = `IF(OR(${A}="",NOT(OR(${active},${sent}))),"",IF(INT(${A})<TODAY(),"",IF(${when}="","","торги "&${when})))`;
+  return `=IF(${auction}="",${days},IF(${days}="",${auction},${days}&CHAR(10)&CHAR(10)&${auction}))`;
 }
 
 // Формула с запятыми; если таблица её не поняла (локаль с «;») — пробуем вариант с «;»
@@ -435,6 +462,7 @@ function upsert(sh, t) {
   const row = existing || sh.getLastRow() + 1;
   sh.getRange(row, 1, 1, COLS.length).setValues([values]);
   setFormulaSafe(sh.getRange(row, col('left')), leftFormula(row));
+  setAuctionFormat(sh, row, values[col('auctionDate') - 1]);
   sh.getRange(row, col('status')).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(STATUSES, true).build());
   // номер закупки — ссылка на страницу тендера

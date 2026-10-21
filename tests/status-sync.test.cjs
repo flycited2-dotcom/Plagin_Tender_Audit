@@ -11,6 +11,7 @@ function run({oldStatus, incomingStatus, existing = true, otherBrowser = false, 
     getValue: () => oldStatus,
     setValues: values => { written = values[0]; },
     setDataValidation: () => {},
+    setNumberFormat: () => {},
     setRichTextValue: () => {},
   };
   const sh = {
@@ -25,6 +26,7 @@ function run({oldStatus, incomingStatus, existing = true, otherBrowser = false, 
     }),
     autoResizeRows: () => {},
     getRowHeight: () => 48,
+    setRowHeight: () => {},
   };
   const context = vm.createContext({
     SpreadsheetApp: {newDataValidation: () => chain, flush: () => {}},

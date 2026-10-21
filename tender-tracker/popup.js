@@ -18,12 +18,18 @@ function setInfo(text, kind = '') {
 
 function fillForm(t) {
   for (const f of FIELDS) $(f).value = t[f] || '';
+  // дата и время торгов хранятся вместе: «2026-10-23T11:35»
+  const [day, time = ''] = (t.auctionDate || '').split('T');
+  $('auctionDate').value = day;
+  $('auctionTime').value = time;
 }
 
 function readForm() {
   const t = {};
   for (const f of FIELDS) t[f] = $(f).value.trim();
   t.nmck = t.nmck.replace(/\s/g, '').replace(',', '.');
+  const time = $('auctionTime').value;
+  if (t.auctionDate && time) t.auctionDate += 'T' + time;
   return t;
 }
 
@@ -82,6 +88,7 @@ async function init() {
   }
   fillForm(current);
   for (const f of AUTO_FIELDS) if (data && data[f]) $(f).classList.add('auto');
+  if (data && /T/.test(data.auctionDate || '')) $('auctionTime').classList.add('auto');
 
   if (!data) setInfo('Страницу прочитать не удалось — заполните вручную', 'warn');
   else if (found === 0) setInfo('Поля не распознаны — заполните вручную', 'warn');
@@ -100,7 +107,7 @@ async function checkSheetDuplicate(number) {
   for (const k of FIELDS) if (!merged[k] && current[k]) merged[k] = current[k];
   current = merged;
   fillForm(current);
-  for (const k of FIELDS) $(k).classList.remove('auto');
+  for (const k of [...FIELDS, 'auctionTime']) $(k).classList.remove('auto');
   const when = f.updatedAt ? new Date(f.updatedAt).toLocaleDateString('ru-RU') : '';
   setInfo(`⚠️ Этот тендер уже есть в таблице (статус «${f.status || '—'}»${when ? ', обновлён ' + when : ''}). ` +
     'Открыта существующая запись — «Сохранить» обновит её, дубля не будет.', 'warn');

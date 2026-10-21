@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Учёт тендеров
 // @namespace    plagin-tender-audit
-// @version      1.3.3
+// @version      1.4.0
 // @updateURL    https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @downloadURL  https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @description  Кнопка «В учёт» на страницах закупок: поля заполняются сами, тендер уходит в Google Таблицу
@@ -117,10 +117,12 @@
   
     const DATE_RE = /(\d{2})\.(\d{2})\.(\d{4})(?:[^\d]{1,6}(\d{1,2}):(\d{2}))?/;
     const hasDate = v => DATE_RE.test(v);
+    // withTime: true — всегда со временем (нет времени — 09:00), 'auto' — время, только если оно указано
     function toISO(s, withTime) {
       const m = (s || '').match(DATE_RE);
       if (!m) return '';
       const d = `${m[3]}-${m[2]}-${m[1]}`;
+      if (withTime === 'auto') return m[4] ? `${d}T${m[4].padStart(2, '0')}:${m[5]}` : d;
       return withTime ? `${d}T${(m[4] || '09').padStart(2, '0')}:${m[5] || '00'}` : d;
     }
   
@@ -212,13 +214,20 @@
       /срок подачи заявок/i
     ], hasDate), true);
   
-    // --- Дата торгов / итогов ---
-    const auctionDate = toISO(findByLabel([
-      /^Дата (и время )?проведения (электронного )?аукциона/i,
-      /^Дата (и время )?(проведения )?(торгов|процедуры)/i,
+    // --- Дата и время торгов / итогов ---
+    let auctionDate = toISO(findByLabel([
+      /^Дата (и время )?(начала )?проведения (электронного )?аукциона/i,
+      /^Дата (и время )?(начала )?(проведения )?(торгов|процедуры|аукциона)/i,
+      /^(Дата и время )?начал[оа] (торгов|аукциона|проведения)/i,
       /^Дата (и время )?подведения итогов/i,
       /^Дата (и время )?рассмотрения/i
-    ], hasDate), false);
+    ], hasDate), 'auto');
+    // время начала торгов бывает отдельным полем: «Время проведения аукциона: 11:35»
+    if (auctionDate && !auctionDate.includes('T')) {
+      const tm = findByLabel([/^Время (начала )?(проведения )?(электронного )?(аукциона|торгов|процедуры)/i],
+        v => /^\D{0,3}\d{1,2}:\d{2}/.test(v)).match(/(\d{1,2}):(\d{2})/);
+      if (tm) auctionDate += `T${tm[1].padStart(2, '0')}:${tm[2]}`;
+    }
   
     // --- Электронная площадка (где пройдут торги) ---
     const ETP_BY_HOST = [
@@ -324,7 +333,7 @@
     for (const k of FIELDS) if (!merged[k] && current[k]) merged[k] = current[k];
     current = merged;
     fillForm(current);
-    for (const k of FIELDS) field(k).classList.remove('auto');
+    for (const k of [...FIELDS, 'auctionTime']) field(k).classList.remove('auto');
     const when = f.updatedAt ? new Date(f.updatedAt).toLocaleDateString('ru-RU') : '';
     setInfo(`⚠️ Этот тендер уже есть в таблице (статус «${f.status || '—'}»${when ? ', обновлён ' + when : ''}). ` +
       'Открыта существующая запись — «Сохранить» обновит её, дубля не будет.', 'warn');
@@ -391,6 +400,7 @@
   textarea { resize: vertical; }
   .auto { background: #e6f4ea; border-color: #81c995; }
   .row { display: flex; gap: 8px; } .row > label { flex: 1; min-width: 0; }
+  .pair { display: flex; gap: 4px; } .pair > input { min-width: 0; } .pair > input[type="time"] { flex: 0 0 80px; }
   .actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
   .btn { padding: 8px 16px; border-radius: 6px; border: 1px solid #d0d7de; background: #fff; cursor: pointer; font-size: 13px; }
   .primary { background: #1a73e8; border-color: #1a73e8; color: #fff; font-weight: 600; }
@@ -420,7 +430,8 @@
     </div>
     <div class="row">
       <label>Срок подачи заявки<input name="deadline" type="datetime-local"></label>
-      <label>Дата торгов / итогов<input name="auctionDate" type="date"></label>
+      <label>Торги / итоги: дата и время
+        <span class="pair"><input name="auctionDate" type="date"><input name="auctionTime" type="time" title="Время начала торгов"></span></label>
     </div>
     <label>Комментарий<textarea name="comment" rows="2"></textarea></label>
     <label>Ссылка<input name="url"></label>
@@ -455,6 +466,10 @@
 
   function fillForm(t) {
     for (const f of FIELDS) field(f).value = t[f] || '';
+    // дата и время торгов хранятся вместе: «2026-10-23T11:35»
+    const [day, time = ''] = (t.auctionDate || '').split('T');
+    field('auctionDate').value = day;
+    field('auctionTime').value = time;
   }
 
   function openPanel() {
@@ -463,7 +478,7 @@
     const s = settings();
     $('.sheet').style.display = s.sheetUrl ? '' : 'none';
     if (s.sheetUrl) $('.sheet').href = s.sheetUrl;
-    for (const f of FIELDS) field(f).classList.remove('auto');
+    for (const f of [...FIELDS, 'auctionTime']) field(f).classList.remove('auto');
 
     const saved = findSaved(data);
     if (saved) {
@@ -484,6 +499,7 @@
       if (data) for (const f of AUTO_FIELDS) if (data[f]) { current[f] = data[f]; found++; }
       fillForm(current);
       if (data) for (const f of AUTO_FIELDS) if (data[f]) field(f).classList.add('auto');
+      if (data && /T/.test(data.auctionDate || '')) field('auctionTime').classList.add('auto');
       $('.del').hidden = true;
       setInfo(found
         ? `Распознано полей: ${found} из ${AUTO_FIELDS.length}. Зелёные — заполнены сами, проверьте их.`
@@ -503,6 +519,7 @@
     const data = {};
     for (const f of FIELDS) data[f] = String(field(f).value || '').trim();
     data.nmck = data.nmck.replace(/\s/g, '').replace(',', '.');
+    if (data.auctionDate && field('auctionTime').value) data.auctionDate += 'T' + field('auctionTime').value;
     if (!data.number && !data.subject) { setInfo('Укажите хотя бы номер или предмет закупки', 'err'); return; }
 
     const record = Object.assign({}, current, data, { id: current.id || newId(), updatedAt: new Date().toISOString() });
