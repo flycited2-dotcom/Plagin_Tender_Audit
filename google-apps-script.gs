@@ -474,5 +474,7 @@ function upsert(sh, t) {
   SpreadsheetApp.flush();
   sh.autoResizeRows(row, 1);
   if (sh.getRowHeight(row) < MIN_ROW_HEIGHT) sh.setRowHeight(row, MIN_ROW_HEIGHT);
+  // «Не состоялся» — тендер попадает на лист «Не состоялись» (failed-tenders.gs)
+  if (typeof failedTrack === 'function') failedTrack(t);
   return { id: t.id, merged };
 }
