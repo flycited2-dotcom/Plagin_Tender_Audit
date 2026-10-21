@@ -65,10 +65,10 @@ function failedStop() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'failedTick').forEach(t => ScriptApp.deleteTrigger(t));
 }
 
-// Прислать напоминание прямо сейчас (для проверки)
+// Прислать напоминание прямо сейчас (для проверки): все незакрытые, даже если срок проверки ещё не наступил
 function failedTestReminder() {
-  const text = failedReminderText(failedReadRows(), new Date());
-  if (text) tgSend(text); else Logger.log('Проверять сейчас некого');
+  const text = failedReminderText(failedReadRows(), new Date(2100, 0, 1));
+  if (text) tgSend('🧪 <i>Тест напоминания</i>\n' + text); else Logger.log('На листе нет незакрытых тендеров');
 }
 
 // Лист «Не состоялись» (создаётся и оформляется при первом обращении)
