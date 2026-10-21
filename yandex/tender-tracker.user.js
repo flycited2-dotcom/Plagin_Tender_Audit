@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Учёт тендеров
 // @namespace    plagin-tender-audit
-// @version      1.3.2
+// @version      1.3.3
 // @updateURL    https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @downloadURL  https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @description  Кнопка «В учёт» на страницах закупок: поля заполняются сами, тендер уходит в Google Таблицу
@@ -192,7 +192,9 @@
     // --- НМЦК ---
     let nmck = '';
     const priceText = findByLabel(
-      [/^Начальная \(?максимальная\)? цена/i, /^НМЦ[КД]?(?=\s*[:(]|\s*$)/i, // подпись, а не имя файла «НМЦК Карамелька 30кВт.xlsx» /^Начальная цена/i, /^Цена (договора|контракта|лота)/i,
+      [/^Начальная \(?максимальная\)? цена/i,
+        /^НМЦ[КД]?(?=\s*[:(]|\s*$)/i, // подпись, а не имя файла «НМЦК Карамелька 30кВт.xlsx»
+        /^Начальная цена/i, /^Цена (договора|контракта|лота)/i,
         /^Стартовая( \/ максимальная)? цена/i, /^Максимальная цена/i], // ЕАТ: «Стартовая / Максимальная цена»
       v => /\d/.test(v)
     );
