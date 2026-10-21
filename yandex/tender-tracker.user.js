@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Учёт тендеров
 // @namespace    plagin-tender-audit
-// @version      1.4.0
+// @version      1.4.1
 // @updateURL    https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @downloadURL  https://raw.githubusercontent.com/flycited2-dotcom/Plagin_Tender_Audit/main/yandex/tender-tracker.user.js
 // @description  Кнопка «В учёт» на страницах закупок: поля заполняются сами, тендер уходит в Google Таблицу
@@ -116,10 +116,17 @@
     }
   
     const DATE_RE = /(\d{2})\.(\d{2})\.(\d{4})(?:[^\d]{1,6}(\d{1,2}):(\d{2}))?/;
-    const hasDate = v => DATE_RE.test(v);
+    // даты других видов → «дд.мм.гггг»: «26 окт. 2026» (РТС-тендер), «26.10.26» (Росэлторг)
+    const MONTHS = ['янв', 'фев', 'мар', 'апр', 'ма', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+    const monthNo = w => String(MONTHS.findIndex(p => w.toLowerCase().startsWith(p)) + 1).padStart(2, '0');
+    const normDate = s => (s || '')
+      .replace(/(\d{1,2})\s+(янв|фев|мар|апр|ма[йя]|июн|июл|авг|сен|окт|ноя|дек)[а-я]*\.?\s+(\d{4})/gi,
+        (m, d, mon, y) => `${d.padStart(2, '0')}.${monthNo(mon)}.${y}`)
+      .replace(/(^|\D)(\d{2})\.(\d{2})\.(\d{2})(?![\d.])/g, '$1$2.$3.20$4');
+    const hasDate = v => DATE_RE.test(normDate(v));
     // withTime: true — всегда со временем (нет времени — 09:00), 'auto' — время, только если оно указано
     function toISO(s, withTime) {
-      const m = (s || '').match(DATE_RE);
+      const m = normDate(s).match(DATE_RE);
       if (!m) return '';
       const d = `${m[3]}-${m[2]}-${m[1]}`;
       if (withTime === 'auto') return m[4] ? `${d}T${m[4].padStart(2, '0')}:${m[5]}` : d;
@@ -132,8 +139,11 @@
       const u = new URL(location.href);
       for (const k of ['regNumber', 'purchaseNumber', 'noticeNumber', 'number', 'id']) {
         const v = u.searchParams.get(k);
-        if (v && /^\d{8,}$/.test(v)) { number = v; break; }
+        // id — часто внутренний номер площадки (Сбер: ?id=11139452), а не номер закупки
+        if (v && (k === 'id' ? /^\d{11,}$/ : /^\d{8,}$/).test(v)) { number = v; break; }
       }
+      // номер в адресе: roseltorg.ru/procedure/0875300029426000293/1, rts-tender.ru/poisk/id/l0274100000226000110-1/
+      if (!number) number = (u.pathname.match(/(?:^|\D)(\d{11}|\d{19})(?!\d)/) || [])[1] || '';
     } catch (e) { /* ignore */ }
     if (!number) {
       const v = findByLabel(
@@ -211,6 +221,7 @@
       /окончания срока подачи заявок/i,
       /окончани[ея] (при[её]ма|подачи) (заявок|предложений)/i, // ЕАТ: «Дата окончания подачи предложений»
       /(при[её]м|подача) заявок до/i,
+      /^Подать заявку до/i, // РТС-тендер
       /срок подачи заявок/i
     ], hasDate), true);
   
@@ -219,6 +230,7 @@
       /^Дата (и время )?(начала )?проведения (электронного )?аукциона/i,
       /^Дата (и время )?(начала )?(проведения )?(торгов|процедуры|аукциона)/i,
       /^(Дата и время )?начал[оа] (торгов|аукциона|проведения)/i,
+      /^Дата проведения(?=\s*:)/i, // РТС-тендер: «Дата проведения: 26 окт. 2026 09:00 мск»
       /^Дата (и время )?подведения итогов/i,
       /^Дата (и время )?рассмотрения/i
     ], hasDate), 'auto');
@@ -329,14 +341,17 @@
     const res = await post({ action: 'find', number });
     if (!res.ok || !res.found || current.id) return;
     const f = res.found;
+    const page = current;
     const merged = Object.assign({}, f);
     for (const k of FIELDS) if (!merged[k] && current[k]) merged[k] = current[k];
     current = merged;
     fillForm(current);
     for (const k of [...FIELDS, 'auctionTime']) field(k).classList.remove('auto');
+    const found = fillMissing(page); // в таблице торги без времени, а на странице оно есть
     const when = f.updatedAt ? new Date(f.updatedAt).toLocaleDateString('ru-RU') : '';
     setInfo(`⚠️ Этот тендер уже есть в таблице (статус «${f.status || '—'}»${when ? ', обновлён ' + when : ''}). ` +
-      'Открыта существующая запись — «Сохранить» обновит её, дубля не будет.', 'warn');
+      'Открыта существующая запись — «Сохранить» обновит её, дубля не будет.' +
+      (found.length ? ` Со страницы добавлено: ${found.join(', ')}.` : ''), 'warn');
   }
 
   async function sendDelete(id) {
@@ -472,6 +487,26 @@
     field('auctionTime').value = time;
   }
 
+  // Дописать в открытую запись то, чего в ней нет, а на странице есть: площадку и время торгов
+  function fillMissing(data) {
+    const found = [];
+    if (!data) return found;
+    if (!field('etp').value && data.etp) {
+      field('etp').value = data.etp;
+      field('etp').classList.add('auto');
+      found.push('площадка');
+    }
+    if (!field('auctionTime').value && /T/.test(data.auctionDate || '')) {
+      const [day, time] = data.auctionDate.split('T');
+      field('auctionDate').value = day;
+      field('auctionTime').value = time;
+      field('auctionDate').classList.add('auto');
+      field('auctionTime').classList.add('auto');
+      found.push('время торгов ' + time);
+    }
+    return found;
+  }
+
   function openPanel() {
     let data = null;
     try { data = extractTender(); } catch (e) { /* страница необычная — заполним вручную */ }
@@ -485,11 +520,10 @@
       current = saved;
       fillForm(current);
       $('.del').hidden = false;
-      // площадка появилась позже — дозаполняем у старых записей
-      if (!current.etp && data && data.etp) {
-        field('etp').value = data.etp;
-        field('etp').classList.add('auto');
-        setInfo('Этот тендер уже в учёте. Найдена площадка — нажмите «Сохранить», чтобы дописать её в таблицу', 'ok');
+      // площадка и время торгов появились позже — дозаполняем у старых записей
+      const found = fillMissing(data);
+      if (found.length) {
+        setInfo(`Этот тендер уже в учёте. Найдено: ${found.join(', ')} — нажмите «Сохранить», чтобы дописать в таблицу`, 'ok');
       } else {
         setInfo('Этот тендер уже в учёте — обновите статус или данные', 'ok');
       }

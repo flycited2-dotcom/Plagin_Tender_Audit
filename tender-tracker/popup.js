@@ -33,6 +33,26 @@ function readForm() {
   return t;
 }
 
+// Дописать в открытую запись то, чего в ней нет, а на странице есть: площадку и время торгов
+function fillMissing(data) {
+  const found = [];
+  if (!data) return found;
+  if (!$('etp').value && data.etp) {
+    $('etp').value = data.etp;
+    $('etp').classList.add('auto');
+    found.push('площадка');
+  }
+  if (!$('auctionTime').value && /T/.test(data.auctionDate || '')) {
+    const [day, time] = data.auctionDate.split('T');
+    $('auctionDate').value = day;
+    $('auctionTime').value = time;
+    $('auctionDate').classList.add('auto');
+    $('auctionTime').classList.add('auto');
+    found.push('время торгов ' + time);
+  }
+  return found;
+}
+
 async function readPage(tab) {
   try {
     const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: extractTender });
@@ -68,11 +88,10 @@ async function init() {
     current = existing;
     fillForm(current);
     $('delete').hidden = false;
-    // площадка появилась позже — дозаполняем у старых записей, если на странице она есть
-    if (!current.etp && data && data.etp) {
-      $('etp').value = data.etp;
-      $('etp').classList.add('auto');
-      setInfo('Этот тендер уже в базе. Найдена площадка — нажмите «Сохранить», чтобы дописать её в таблицу', 'ok');
+    // площадка и время торгов появились позже — дозаполняем у старых записей, если на странице они есть
+    const found = fillMissing(data);
+    if (found.length) {
+      setInfo(`Этот тендер уже в базе. Найдено: ${found.join(', ')} — нажмите «Сохранить», чтобы дописать в таблицу`, 'ok');
     } else {
       setInfo('Этот тендер уже в базе — обновите статус или данные', 'ok');
     }
@@ -103,14 +122,17 @@ async function checkSheetDuplicate(number) {
   if (!res.ok || !res.found || current.id) return;
   const f = res.found;
   // берём запись из таблицы, а пустые поля дополняем распознанным со страницы
+  const page = current;
   const merged = { ...f };
   for (const k of FIELDS) if (!merged[k] && current[k]) merged[k] = current[k];
   current = merged;
   fillForm(current);
   for (const k of [...FIELDS, 'auctionTime']) $(k).classList.remove('auto');
+  const found = fillMissing(page); // в таблице торги без времени, а на странице оно есть
   const when = f.updatedAt ? new Date(f.updatedAt).toLocaleDateString('ru-RU') : '';
   setInfo(`⚠️ Этот тендер уже есть в таблице (статус «${f.status || '—'}»${when ? ', обновлён ' + when : ''}). ` +
-    'Открыта существующая запись — «Сохранить» обновит её, дубля не будет.', 'warn');
+    'Открыта существующая запись — «Сохранить» обновит её, дубля не будет.' +
+    (found.length ? ` Со страницы добавлено: ${found.join(', ')}.` : ''), 'warn');
 }
 
 $('form').addEventListener('input', e => e.target.classList.remove('auto'));

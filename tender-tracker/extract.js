@@ -66,10 +66,17 @@ function extractTender() {
   }
 
   const DATE_RE = /(\d{2})\.(\d{2})\.(\d{4})(?:[^\d]{1,6}(\d{1,2}):(\d{2}))?/;
-  const hasDate = v => DATE_RE.test(v);
+  // даты других видов → «дд.мм.гггг»: «26 окт. 2026» (РТС-тендер), «26.10.26» (Росэлторг)
+  const MONTHS = ['янв', 'фев', 'мар', 'апр', 'ма', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+  const monthNo = w => String(MONTHS.findIndex(p => w.toLowerCase().startsWith(p)) + 1).padStart(2, '0');
+  const normDate = s => (s || '')
+    .replace(/(\d{1,2})\s+(янв|фев|мар|апр|ма[йя]|июн|июл|авг|сен|окт|ноя|дек)[а-я]*\.?\s+(\d{4})/gi,
+      (m, d, mon, y) => `${d.padStart(2, '0')}.${monthNo(mon)}.${y}`)
+    .replace(/(^|\D)(\d{2})\.(\d{2})\.(\d{2})(?![\d.])/g, '$1$2.$3.20$4');
+  const hasDate = v => DATE_RE.test(normDate(v));
   // withTime: true — всегда со временем (нет времени — 09:00), 'auto' — время, только если оно указано
   function toISO(s, withTime) {
-    const m = (s || '').match(DATE_RE);
+    const m = normDate(s).match(DATE_RE);
     if (!m) return '';
     const d = `${m[3]}-${m[2]}-${m[1]}`;
     if (withTime === 'auto') return m[4] ? `${d}T${m[4].padStart(2, '0')}:${m[5]}` : d;
@@ -82,8 +89,11 @@ function extractTender() {
     const u = new URL(location.href);
     for (const k of ['regNumber', 'purchaseNumber', 'noticeNumber', 'number', 'id']) {
       const v = u.searchParams.get(k);
-      if (v && /^\d{8,}$/.test(v)) { number = v; break; }
+      // id — часто внутренний номер площадки (Сбер: ?id=11139452), а не номер закупки
+      if (v && (k === 'id' ? /^\d{11,}$/ : /^\d{8,}$/).test(v)) { number = v; break; }
     }
+    // номер в адресе: roseltorg.ru/procedure/0875300029426000293/1, rts-tender.ru/poisk/id/l0274100000226000110-1/
+    if (!number) number = (u.pathname.match(/(?:^|\D)(\d{11}|\d{19})(?!\d)/) || [])[1] || '';
   } catch (e) { /* ignore */ }
   if (!number) {
     const v = findByLabel(
@@ -161,6 +171,7 @@ function extractTender() {
     /окончания срока подачи заявок/i,
     /окончани[ея] (при[её]ма|подачи) (заявок|предложений)/i, // ЕАТ: «Дата окончания подачи предложений»
     /(при[её]м|подача) заявок до/i,
+    /^Подать заявку до/i, // РТС-тендер
     /срок подачи заявок/i
   ], hasDate), true);
 
@@ -169,6 +180,7 @@ function extractTender() {
     /^Дата (и время )?(начала )?проведения (электронного )?аукциона/i,
     /^Дата (и время )?(начала )?(проведения )?(торгов|процедуры|аукциона)/i,
     /^(Дата и время )?начал[оа] (торгов|аукциона|проведения)/i,
+    /^Дата проведения(?=\s*:)/i, // РТС-тендер: «Дата проведения: 26 окт. 2026 09:00 мск»
     /^Дата (и время )?подведения итогов/i,
     /^Дата (и время )?рассмотрения/i
   ], hasDate), 'auto');

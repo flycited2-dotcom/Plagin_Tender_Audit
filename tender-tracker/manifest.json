@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Учёт тендеров",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Быстрое сохранение тендеров с площадок: автораспознавание полей, статусы, сроки, Google Таблица, экспорт в Excel.",
   "permissions": ["storage", "activeTab", "scripting", "alarms"],
   "host_permissions": [
